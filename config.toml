@@ -1,0 +1,33 @@
+# zai-monitor configuration
+
+[zai]
+# Read from .env by default, but can override here:
+# api_key = "..."
+endpoint = "https://api.z.ai/api/monitor/usage/quota/limit"
+# endpoint for plan/customer info
+info_endpoint = "https://api.z.ai/api/biz/customerService/zaiUserInfo"
+timeout_sec = 20
+
+[monitor]
+# Background polling interval for alerts daemon (seconds)
+poll_interval = 300
+
+[tui]
+# TUI auto-refresh interval (seconds)
+refresh_interval = 60
+
+[alerts]
+# Telegram (leave empty to disable)
+tg_bot_token = ""
+tg_chat_id = ""
+
+# Alert when usage >= these percentages (checked on the way UP).
+# Each level fires once per reset cycle (debounced via sqlite).
+thresholds = [50, 75, 90, 100]
+
+# Also send a "recovered / reset" notification when usage drops back below
+# `recovered_below` after being above it (i.e. a fresh cycle started).
+recovered_below = 20
+
+# Minimum seconds between any two alerts to the same chat (anti-spam global floor)
+min_interval_sec = 60
