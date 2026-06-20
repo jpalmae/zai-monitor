@@ -250,6 +250,9 @@ poll_interval = 300        # segundos entre polls del daemon de alertas
 [tui]
 refresh_interval = 60      # segundos entre refresh de la TUI
 
+[zai]
+name = ""                  # (opcional) etiqueta amigable para la cuenta
+
 [alerts]
 tg_bot_token   = ""        # token de @BotFather (vacío = desactivado)
 tg_chat_id     = ""        # tu chat id
@@ -262,6 +265,23 @@ La API key va en `.env` (no en `config.toml`, para no commitearla por error):
 ```bash
 ZAI_API_KEY=tu-api-key-aqui
 ```
+
+### Multi-cuenta (varias suscripciones)
+
+Si manejas varias cuentas del coding plan, puedes ponerles un **nombre amigable**
+que aparecerá en la TUI (debajo del email, en magenta) y en los mensajes de
+Telegram — útil para saber qué cuenta disparó cada alerta.
+
+En `.env` (junto a la API key, así cada instancia tiene el suyo):
+```bash
+ZAI_API_KEY=aaaa.bbbb
+ZAI_ACCOUNT_NAME=Personal
+```
+o en `config.toml` → `[zai] name = "Personal"`.
+
+Para monitorear varias a la vez, clona el proyecto en carpetas distintas (o usa
+`.env` diferentes) y lanza una TUI/daemon por cada una. El email se lee
+automáticamente de la API, no hace falta ponerlo.
 
 ---
 

@@ -19,6 +19,7 @@ from textual.containers import VerticalScroll
 from textual.reactive import reactive
 from textual.widgets import Footer, Header, Static
 
+import config
 import store
 from fetcher import Quota, Snapshot, ZaiError, fetch_account, fetch_snapshot
 
@@ -149,8 +150,6 @@ class ZaiMonitorApp(App):
         self.set_interval(1, self._tick)
 
     def _tick(self) -> None:
-        import config
-
         self.refresh_in -= 1
         if self.refresh_in <= 0:
             self.refresh_in = config.tui_refresh_interval()
@@ -182,11 +181,13 @@ class ZaiMonitorApp(App):
 
         level = PLAN_LABEL.get((snap.level or "").lower(), (snap.level or "?").upper())
         fetched = snap.fetched_at.astimezone().strftime("%H:%M:%S")
-        header = (
-            f"[bold]z.ai GLM Coding Plan[/] — [cyan]{level}[/]"
-            + (f"   {self.email}" if self.email else "")
-            + f"\n[dim]last updated {fetched}[/]"
-        )
+        header = f"[bold]z.ai GLM Coding Plan[/] — [cyan]{level}[/]"
+        if self.email:
+            header += f"   {self.email}"
+        acct = config.account_name()
+        if acct:
+            header += f"\n[magenta]↳ {acct}[/]"
+        header += f"\n[dim]last updated {fetched}[/]"
         try:
             self.query_one("#title", Static).update(header)
         except Exception:

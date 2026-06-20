@@ -26,3 +26,15 @@ def poll_interval() -> int:
 
 def api_key() -> str:
     return os.getenv("ZAI_API_KEY", "").strip()
+
+
+def account_name() -> str:
+    """Optional friendly label for the account (multi-account setups).
+
+    Precedence: env ZAI_ACCOUNT_NAME > config.toml [zai].name.
+    Returns "" if unset.
+    """
+    env_name = os.getenv("ZAI_ACCOUNT_NAME", "").strip()
+    if env_name:
+        return env_name
+    return str(_load().get("zai", {}).get("name", "")).strip()

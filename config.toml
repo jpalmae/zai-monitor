@@ -1,8 +1,10 @@
 # zai-monitor configuration
 
 [zai]
-# Read from .env by default, but can override here:
-# api_key = "..."
+# Optional friendly name for this account (shown in the TUI under the email
+# and in Telegram messages). Useful when you monitor several coding accounts.
+# Leave empty to hide it. Can also be set via ZAI_ACCOUNT_NAME in .env.
+name = ""
 endpoint = "https://api.z.ai/api/monitor/usage/quota/limit"
 # endpoint for plan/customer info
 info_endpoint = "https://api.z.ai/api/biz/customerService/zaiUserInfo"

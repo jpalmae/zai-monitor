@@ -65,7 +65,16 @@ def _fmt_quota(q: Quota) -> str:
 
 def _build_message(snap: Snapshot, fired: list[tuple[str, int]], recovered: list[str]) -> str:
     level = (snap.level or "?").upper()
-    lines = [f"*z.ai Coding Plan ({level})* quota update", ""]
+    try:
+        import config
+
+        acct = config.account_name()
+    except Exception:
+        acct = ""
+    title = f"*z.ai Coding Plan ({level})* quota update"
+    if acct:
+        title += f" — _{acct}_"
+    lines = [title, ""]
     if fired:
         parts = []
         for key, _lvl in fired:
