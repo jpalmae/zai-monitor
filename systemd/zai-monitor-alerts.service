@@ -1,0 +1,28 @@
+[Unit]
+Description=z.ai GLM Coding Plan quota monitor (alerts daemon)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# TODO: replace USERNAME and the project path with your own.
+# This runs the venv python so deps are isolated.
+Type=simple
+WorkingDirectory=/home/USERNAME/zai-monitor
+ExecStart=/home/USERNAME/zai-monitor/.venv/bin/python /home/USERNAME/zai-monitor/alerts.py
+
+# Flush logs immediately so journalctl shows them in real time.
+Environment=PYTHONUNBUFFERED=1
+
+# Auto-restart on crash.
+Restart=on-failure
+RestartSec=10
+
+# Hardening. We keep it light: the daemon writes store.db inside its
+# WorkingDirectory under /home, so we don't lock /home down (that would
+# break sqlite). ProtectSystem keeps /usr, /boot, /efi read-only.
+NoNewPrivileges=true
+ProtectSystem=strict
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

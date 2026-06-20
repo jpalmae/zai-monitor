@@ -19,10 +19,11 @@ avisa cuando pasas ciertos umbrales de consumo.
 4. [Uso](#uso)
 5. [Alertas por Telegram](#alertas-por-telegram)
 6. [Daemon en background (macOS)](#daemon-en-background-macos)
-7. [Configuración](#configuración)
-8. [Solución de problemas](#solución-de-problemas)
-9. [Cómo funciona (notas técnicas)](#cómo-funciona-notas-técnicas)
-10. [Estructura del proyecto](#estructura-del-proyecto)
+7. [Daemon en background (Linux / Ubuntu 24.04+)](#daemon-en-background-linux--ubuntu-2404)
+8. [Configuración](#configuración)
+9. [Solución de problemas](#solución-de-problemas)
+10. [Cómo funciona (notas técnicas)](#cómo-funciona-notas-técnicas)
+11. [Estructura del proyecto](#estructura-del-proyecto)
 
 ---
 
@@ -276,6 +277,52 @@ launchctl unload ~/Library/LaunchAgents/ai.zai-monitor.alerts.plist
 launchctl load   ~/Library/LaunchAgents/ai.zai-monitor.alerts.plist
 ```
 
+---
+
+## Daemon en background (Linux / Ubuntu 24.04+)
+
+Usa **systemd** con un servicio de usuario (sin necesidad de root). El daemon
+loguea al journal del sistema (no necesita archivo de log).
+
+```bash
+# 1. Edita systemd/zai-monitor-alerts.service y reemplaza USERNAME por tu
+#    usuario (y la ruta del proyecto si no está en ~/zai-monitor).
+
+# 2. Instálalo como servicio de usuario
+mkdir -p ~/.config/systemd/user
+cp systemd/zai-monitor-alerts.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now zai-monitor-alerts
+
+# 3. Para que el daemon siga corriendo aunque cierres sesión (importante en servidores)
+loginctl enable-linger $USER
+```
+
+**Logs:** `journalctl --user -u zai-monitor-alerts`
+
+**Gestión:**
+```bash
+# ver estado
+systemctl --user status zai-monitor-alerts
+
+# ver logs en vivo
+journalctl --user -u zai-monitor-alerts -f
+
+# parar / iniciar / reiniciar (tras cambiar config.toml)
+systemctl --user restart zai-monitor-alerts
+systemctl --user stop    zai-monitor-alerts
+systemctl --user start   zai-monitor-alerts
+
+# desinstalar
+systemctl --user disable --now zai-monitor-alerts
+rm ~/.config/systemd/user/zai-monitor-alerts.service
+systemctl --user daemon-reload
+```
+
+> El servicio usa el Python del venv (`.venv/bin/python`) y lee `.env` +
+> `config.toml` del directorio del proyecto (`WorkingDirectory`). Recuerda que
+> `ZAI_API_KEY` debe estar en `.env` y los `tg_chat_ids` en `config.toml`.
+
 > En Linux usa systemd o cron. Ejemplo de cron (cada 5 min):
 > `*/5 * * * * cd /ruta/zai-monitor && .venv/bin/python alerts.py >> /tmp/zai.log 2>&1`
 
@@ -413,6 +460,8 @@ zai-monitor/
 ├── .env / .env.example # API key (no commitear .env)
 ├── launchd/
 │   └── ai.zai-monitor.alerts.plist   # daemon para macOS
+├── systemd/
+│   └── zai-monitor-alerts.service    # daemon para Linux (systemd, usuario)
 └── store.db            # sqlite autogenerado (historial + debounce)
 ```
 
