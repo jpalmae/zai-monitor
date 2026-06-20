@@ -13,6 +13,12 @@ tui = ["textual>=0.60", "rich>=13.7"]
 telegram = ["python-telegram-bot>=21"]
 dev = ["ruff>=0.5"]
 
+# This project is a flat collection of standalone scripts (run from the project
+# dir), NOT an importable package. Explicitly disable setuptools auto-discovery
+# so it doesn't try to package the launchd/ and systemd/ directories.
+[tool.setuptools]
+packages = []
+
 [tool.ruff]
 line-length = 100
 target-version = "py310"
