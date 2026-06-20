@@ -18,7 +18,7 @@ from textual import work
 from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll
 from textual.reactive import reactive
-from textual.widgets import Footer, Header, Static
+from textual.widgets import Header, Static
 
 import config
 import store
@@ -118,6 +118,22 @@ class QuotaBlock(Static):
         self.refresh(layout=True)
 
 
+# Bindings shown in the bottom status bar (key, label).
+FOOTER_BINDINGS = [("r", "Refresh"), ("t", "Theme"), ("q", "Quit")]
+
+
+class StatusBar(Static):
+    """Bottom bar: account/update status (left) + key hints (right)."""
+
+    status = reactive("")
+
+    def render(self) -> str:
+        keys = "   ".join(
+            f"[bold cyan] {k} [/][dim]{desc}[/]" for k, desc in FOOTER_BINDINGS
+        )
+        return f"{self.status}{keys}"
+
+
 class ZaiMonitorApp(App):
     """Z.ai Coding Plan quota monitor (multi-account)."""
 
@@ -125,7 +141,7 @@ class ZaiMonitorApp(App):
     Screen { background: $surface; }
     #main { padding: 1 2; }
     .panel { border: round $primary; padding: 0 1; margin: 0 0 1 0; height: auto; }
-    #status { color: $text-muted; }
+    StatusBar { dock: bottom; height: 1; padding: 0 1; background: $boost; }
     """
 
     BINDINGS = [
@@ -140,18 +156,17 @@ class ZaiMonitorApp(App):
         self.accounts = config.load_accounts()
         # cache email per account (best-effort, fetched once)
         self.emails: dict[str, str | None] = {a.name: None for a in self.accounts}
+        self.last_updated: str = ""
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
         with VerticalScroll(id="main"):
-            yield Static("", id="title", classes="panel")
             for idx, acct in enumerate(self.accounts):
                 label = acct.name or f"account {idx + 1}"
                 yield Static("", id=f"acct-{idx}", classes="panel")
                 for key in ORDER:
                     yield QuotaBlock(label, key)
-            yield Static("", id="status")
-        yield Footer()
+        yield StatusBar(id="statusbar")
 
     def on_mount(self) -> None:
         store.init()
@@ -178,7 +193,7 @@ class ZaiMonitorApp(App):
         if self.refresh_in <= 0:
             self.refresh_in = config.tui_refresh_interval()
             self._do_refresh()
-        self._set_status(f"next refresh in {self.refresh_in}s")
+        self.update_status()
 
     def action_refresh(self) -> None:
         self._do_refresh()
@@ -247,19 +262,19 @@ class ZaiMonitorApp(App):
             block.set_quota(q)
 
         fetched = datetime.now().astimezone().strftime("%H:%M:%S")
+        self.last_updated = fetched
+        self.update_status()
+
+    def update_status(self) -> None:
+        """Render the bottom status bar: accounts · updated · countdown."""
         n = len(self.accounts)
-        self._set_title(f"[bold]z.ai monitor[/] — [dim]{n} account(s) · updated {fetched}[/]")
-        self._set_status(f"updated {fetched} — next refresh in {self.refresh_in}s")
-
-    def _set_title(self, text: str) -> None:
+        updated = self.last_updated or "—"
+        msg = (
+            f"[dim]{n} account(s) · updated {updated} · "
+            f"next in {self.refresh_in}s[/]"
+        )
         try:
-            self.query_one("#title", Static).update(text)
-        except Exception:
-            pass
-
-    def _set_status(self, msg: str) -> None:
-        try:
-            self.query_one("#status", Static).update(msg)
+            self.query_one("#statusbar", StatusBar).status = msg
         except Exception:
             pass
 
