@@ -19,17 +19,15 @@ poll_interval = 300
 refresh_interval = 60
 
 [alerts]
-# Telegram (leave empty to disable)
+# Telegram (leave empty to disable alerts)
 tg_bot_token = ""
-tg_chat_id = ""
+# One or more recipients. Each chat id must have sent /start to the bot first.
+# You can list them as an array:
+tg_chat_ids = []
+# ...or a single value / comma-separated (backward compatible):
+# tg_chat_id = "111222333"
+# tg_chat_id = "111222333,444555666"
 
-# Alert when usage >= these percentages (checked on the way UP).
-# Each level fires once per reset cycle (debounced via sqlite).
-thresholds = [50, 75, 90, 100]
-
-# Also send a "recovered / reset" notification when usage drops back below
-# `recovered_below` after being above it (i.e. a fresh cycle started).
-recovered_below = 20
-
-# Minimum seconds between any two alerts to the same chat (anti-spam global floor)
-min_interval_sec = 60
+thresholds       = [50, 75, 90, 100]  # % at which to alert (on the way up)
+recovered_below  = 20                  # notify "reset/available" when usage drops below
+min_interval_sec = 60                  # global anti-spam floor between any two alerts

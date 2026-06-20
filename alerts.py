@@ -26,7 +26,7 @@ ORDER = ["five_hour", "weekly", "mcp"]
 @dataclass
 class AlertConfig:
     tg_bot_token: str
-    tg_chat_id: str
+    tg_chat_ids: list[str]
     thresholds: list[int]
     recovered_below: int
     min_interval_sec: int
@@ -40,9 +40,22 @@ def _load_config() -> AlertConfig:
     cfg_path = Path(__file__).parent / "config.toml"
     cfg = tomllib.loads(cfg_path.read_text()) if cfg_path.exists() else {}
     a = cfg.get("alerts", {})
+
+    # chat ids: accept a list (tg_chat_ids) or a single/comma-separated value
+    # (tg_chat_id) for backward compatibility.
+    ids: list[str] = []
+    if isinstance(a.get("tg_chat_ids"), list):
+        ids = [str(x) for x in a["tg_chat_ids"] if str(x).strip()]
+    single = str(a.get("tg_chat_id", "")).strip()
+    if single:
+        ids.extend([x.strip() for x in single.split(",") if x.strip()])
+    # dedupe, preserve order
+    seen: set[str] = set()
+    chat_ids = [x for x in ids if not (x in seen or seen.add(x))]
+
     return AlertConfig(
         tg_bot_token=a.get("tg_bot_token", ""),
-        tg_chat_id=str(a.get("tg_chat_id", "")),
+        tg_chat_ids=chat_ids,
         thresholds=sorted(a.get("thresholds", [50, 75, 90, 100])),
         recovered_below=int(a.get("recovered_below", 20)),
         min_interval_sec=int(a.get("min_interval_sec", 60)),
@@ -93,18 +106,20 @@ def _build_message(snap: Snapshot, fired: list[tuple[str, int]], recovered: list
 
 
 def _send_telegram(cfg: AlertConfig, text: str) -> None:
-    if not cfg.tg_bot_token or not cfg.tg_chat_id:
+    if not cfg.tg_bot_token or not cfg.tg_chat_ids:
         log.info("telegram not configured; would send:\n%s", text)
         return
-    try:
-        bot = telegram.Bot(token=cfg.tg_bot_token)
-        bot.send_message(
-            chat_id=cfg.tg_chat_id,
-            text=text,
-            parse_mode="Markdown",
-        )
-    except Exception as e:
-        log.error("telegram send failed: %s", e)
+    bot = telegram.Bot(token=cfg.tg_bot_token)
+    for chat_id in cfg.tg_chat_ids:
+        try:
+            bot.send_message(
+                chat_id=chat_id,
+                text=text,
+                parse_mode="Markdown",
+            )
+            log.info("sent to chat_id=%s", chat_id)
+        except Exception as e:
+            log.error("telegram send to %s failed: %s", chat_id, e)
 
 
 def evaluate(snap: Snapshot, cfg: AlertConfig) -> tuple[list[tuple[str, int]], list[str]]:

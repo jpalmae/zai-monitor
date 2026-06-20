@@ -35,8 +35,26 @@ avisa cuando pasas ciertos umbrales de consumo.
 
 ## Instalación
 
+### Opción rápida (una línea)
+
 ```bash
-# 1. Entra al proyecto
+curl -fsSL https://raw.githubusercontent.com/jpalmae/zai-monitor/main/install.sh | bash
+```
+
+Esto clona el repo en `~/zai-monitor`, crea el venv, instala todo y prepara el
+`.env`. Para instalar en otra carpeta, añade la ruta al final:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jpalmae/zai-monitor/main/install.sh | bash -s -- ~/dev/zai
+```
+
+Luego solo edita `.env` con tu API key (siguiente sección) y corre `python tui.py`.
+
+### Opción manual
+
+```bash
+# 1. Clona y entra
+git clone https://github.com/jpalmae/zai-monitor.git
 cd zai-monitor
 
 # 2. Crea y activa un entorno virtual
@@ -183,7 +201,7 @@ Si prefieres hacerlo a mano, edita `config.toml`:
 ```toml
 [alerts]
 tg_bot_token  = "123456789:ABCdefGhi..."
-tg_chat_id    = "9876543210"          # tu chat id
+tg_chat_ids   = ["9876543210"]       # uno o varios destinatarios
 thresholds        = [50, 75, 90, 100] # % en los que alerta (al subir)
 recovered_below   = 20                # avisa "reset/available" al bajar de esto
 min_interval_sec  = 60                # anti-spam: mín. segundos entre alertas
@@ -192,6 +210,25 @@ min_interval_sec  = 60                # anti-spam: mín. segundos entre alertas
 Para saber tu chat id manualmente: mándale cualquier mensaje a tu bot y abre
 `https://api.telegram.org/bot<TOKEN>/getUpdates` en el navegador → busca
 `chat.id`.
+
+### Enviar a varios usuarios
+
+Puedes enviar las alertas a **varios destinatarios** a la vez (tu móvil, un
+compañero de equipo, un canal, etc.). En `config.toml`:
+
+```toml
+[alerts]
+tg_chat_ids = ["9876543210", "1122334455", "-1009999999999"]   # varios
+```
+
+- Cada destinatario es un `chat_id` (numérico para usuarios; los **canales**
+  empiezan con `-100`, p. ej. `-1009999999999`).
+- **Cada usuario debe haber iniciado el bot** enviándole `/start` al menos una
+  vez — Telegram bloquea a los bots enviar a quien no ha hablado con ellos.
+  Para canales, añade el bot como administrador.
+- También puedes usar el formato heredado con coma:
+  `tg_chat_id = "9876543210,1122334455"`.
+- Los ids se deduplican automáticamente.
 
 ### Cómo funciona el debounce (anti-spam)
 
@@ -259,8 +296,8 @@ refresh_interval = 60      # segundos entre refresh de la TUI
 name = ""                  # (opcional) etiqueta amigable para la cuenta
 
 [alerts]
-tg_bot_token   = ""        # token de @BotFather (vacío = desactivado)
-tg_chat_id     = ""        # tu chat id
+tg_bot_token   = ""          # token de @BotFather (vacío = desactivado)
+tg_chat_ids    = []          # uno o varios destinatarios (ver sección Telegram)
 thresholds       = [50, 75, 90, 100]
 recovered_below  = 20
 min_interval_sec = 60
