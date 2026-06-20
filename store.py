@@ -113,6 +113,21 @@ def clear_quota(quota_key: str) -> None:
         c.execute("DELETE FROM alert_state WHERE quota_key=?", (quota_key,))
 
 
+def get_meta(key: str, default: str = "") -> str:
+    with get_conn() as c:
+        row = c.execute("SELECT v FROM meta WHERE k=?", (key,)).fetchone()
+        return row["v"] if row else default
+
+
+def set_meta(key: str, value: str) -> None:
+    with get_conn() as c:
+        c.execute(
+            "INSERT INTO meta(k, v) VALUES(?, ?) "
+            "ON CONFLICT(k) DO UPDATE SET v=excluded.v",
+            (key, value),
+        )
+
+
 if __name__ == "__main__":
     init()
     print("store initialized at", DB_PATH)

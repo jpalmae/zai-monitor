@@ -114,6 +114,7 @@ Verás algo así:
 | Tecla | Acción |
 |-------|--------|
 | `r` | Refrescar ahora |
+| `t` | Alternar tema claro/oscuro (persiste entre sesiones) |
 | `q` | Salir |
 | `^p` | Paleta de comandos |
 
@@ -124,7 +125,11 @@ Verás algo así:
 - 🔴 rojo: ≥ 90%
 
 Se auto-actualiza cada 60s (configurable) y guarda historial en `store.db` para
-dibujar un sparkline debajo de cada barra cuando haya suficientes muestras.
+dibujar un sparkline debajo de cada barra cuando haya suficientes muestras
+(aparece tras un par de minutos de uso).
+
+El tema elegido con `t` (o con la paleta `^p`) se **persiste** en `store.db`,
+así que se mantiene al cerrar y reabrir la app.
 
 ### 2. Lectura puntual (CLI, sin TUI)
 

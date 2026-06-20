@@ -125,7 +125,11 @@ class ZaiMonitorApp(App):
     #status { color: $text-muted; }
     """
 
-    BINDINGS = [("r", "refresh", "Refresh"), ("q", "quit", "Quit")]
+    BINDINGS = [
+        ("r", "refresh", "Refresh"),
+        ("t", "toggle_theme", "Theme"),
+        ("q", "quit", "Quit"),
+    ]
     refresh_in = reactive(0)
 
     def __init__(self) -> None:
@@ -146,8 +150,21 @@ class ZaiMonitorApp(App):
         store.init()
         self.title = "z.ai monitor"
         self.sub_title = "GLM Coding Plan"
+        saved_theme = store.get_meta("theme", "")
+        if saved_theme:
+            try:
+                self.theme = saved_theme
+            except Exception:
+                pass
         self._do_refresh()
         self.set_interval(1, self._tick)
+
+    def watch_theme(self, theme: str) -> None:
+        """Persist the chosen theme across restarts."""
+        try:
+            store.set_meta("theme", theme)
+        except Exception:
+            pass
 
     def _tick(self) -> None:
         self.refresh_in -= 1
@@ -158,6 +175,9 @@ class ZaiMonitorApp(App):
 
     def action_refresh(self) -> None:
         self._do_refresh()
+
+    def action_toggle_theme(self) -> None:
+        self.theme = "textual-light" if self.theme == "textual-dark" else "textual-dark"
 
     @work(exclusive=True)
     async def _do_refresh(self) -> None:
@@ -177,7 +197,14 @@ class ZaiMonitorApp(App):
 
         self.snapshot = snap
         for block in self.query(QuotaBlock):
-            block.set_quota(snap.get(block.key))
+            q = snap.get(block.key)
+            if q:
+                store.record_history(
+                    block.key,
+                    q.percentage,
+                    q.next_reset.timestamp() if q.next_reset else None,
+                )
+            block.set_quota(q)
 
         level = PLAN_LABEL.get((snap.level or "").lower(), (snap.level or "?").upper())
         fetched = snap.fetched_at.astimezone().strftime("%H:%M:%S")
