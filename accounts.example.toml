@@ -1,0 +1,23 @@
+# zai-monitor — multi-account configuration
+#
+# Copy this file to accounts.toml (which is gitignored) and fill in your
+# coding-plan accounts. Each [[accounts]] block is one subscription to monitor.
+#
+# When accounts.toml exists with at least one entry, it takes precedence over
+# the single-account ZAI_API_KEY in .env. If accounts.toml is absent, the
+# project falls back to .env (single account) — so you only need this file
+# when monitoring 2+ accounts.
+
+[[accounts]]
+name = "Personal"
+api_key = "xxxxxxxxxxxxxxxxx.yyyyyyyyyyyyyyyyyyyy"
+# Optional: Telegram recipients for THIS account only.
+# If omitted, the account uses the global [alerts] tg_chat_ids from config.toml.
+# tg_chat_ids = ["111222333"]
+
+[[accounts]]
+name = "Work"
+api_key = "zzzzzzzzzzzzzzzzz.wwwwwwwwwwwwwwwwwwww"
+# tg_chat_ids = ["444555666", "-1009999999999"]   # user + channel
+
+# Add as many [[accounts]] blocks as you need.

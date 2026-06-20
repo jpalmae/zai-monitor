@@ -357,20 +357,39 @@ ZAI_API_KEY=tu-api-key-aqui
 
 ### Multi-cuenta (varias suscripciones)
 
-Si manejas varias cuentas del coding plan, puedes ponerles un **nombre amigable**
-que aparecerá en la TUI (debajo del email, en magenta) y en los mensajes de
-Telegram — útil para saber qué cuenta disparó cada alerta.
+Para monitorear **varias cuentas** del coding plan en una sola instancia (una
+TUI con todas apiladas, un solo daemon que las pollée todas):
 
-En `.env` (junto a la API key, así cada instancia tiene el suyo):
-```bash
-ZAI_API_KEY=aaaa.bbbb
-ZAI_ACCOUNT_NAME=Personal
-```
-o en `config.toml` → `[zai] name = "Personal"`.
+1. Copia el template y rellénalo:
+   ```bash
+   cp accounts.example.toml accounts.toml
+   ```
+2. Define una entrada `[[accounts]]` por cuenta:
+   ```toml
+   [[accounts]]
+   name     = "Personal"
+   api_key  = "aaaa.bbbb"
+   tg_chat_ids = ["111222333"]   # opcional: destinatarios solo para esta cuenta
 
-Para monitorear varias a la vez, clona el proyecto en carpetas distintas (o usa
-`.env` diferentes) y lanza una TUI/daemon por cada una. El email se lee
-automáticamente de la API, no hace falta ponerlo.
+   [[accounts]]
+   name    = "Work"
+   api_key = "cccc.dddd"
+   # sin tg_chat_ids -> usa los globales de config.toml
+   ```
+   `accounts.toml` está en `.gitignore` (no se sube a git), así que las API keys
+   quedan solo en tu máquina.
+
+- **Un solo daemon / una sola TUI** maneja todas las cuentas.
+- El historial y el debounce de alertas son **por cuenta** (no se mezclan).
+- Cada cuenta puede tener **destinatarios de Telegram propios** (`tg_chat_ids`
+  en su bloque); si los omite, usa los globales de `config.toml`.
+- Si una cuenta falla (key inválida, caducada), el daemon la marca
+  `(fetch failed)` en la TUI y sigue con las demás sin detenerse.
+- **Sin `accounts.toml`** el proyecto vuelve al modo single-cuenta usando
+  `ZAI_API_KEY` de `.env` (compatible hacia atrás).
+
+> El email y el nivel de plan de cada cuenta se leen automáticamente de la API;
+> solo necesitas indicar `name` + `api_key`.
 
 ---
 
@@ -453,8 +472,9 @@ zai-monitor/
 ├── fetcher.py          # llama al endpoint y parsea la respuesta
 ├── alerts.py           # daemon de alertas con debounce por ciclo
 ├── store.py            # sqlite: historial + estado de alertas
-├── config.py           # lee config.toml / .env
-├── config.toml         # umbrales, intervalos, telegram
+├── config.py           # lee config.toml / accounts.toml / .env
+├── config.toml         # umbrales, intervalos, telegram (global)
+├── accounts.example.toml  # template multi-cuenta (copia a accounts.toml)
 ├── setup_telegram.py   # helper para configurar Telegram (auto-detecta chat_id)
 ├── probe.py            # script de discovery (referencia, no se necesita)
 ├── .env / .env.example # API key (no commitear .env)

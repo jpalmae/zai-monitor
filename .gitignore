@@ -2,6 +2,7 @@
 __pycache__/
 *.pyc
 .env
+accounts.toml
 store.db
 store.db-journal
 store.db-wal

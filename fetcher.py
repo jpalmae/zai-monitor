@@ -102,12 +102,15 @@ def _headers(token: str) -> dict[str, str]:
     }
 
 
-def fetch_snapshot(client: httpx.Client | None = None) -> Snapshot:
-    """Fetch a fresh quota snapshot. Raises ZaiError on auth/logic failure."""
+def fetch_snapshot(client: httpx.Client | None = None, api_key: str | None = None) -> Snapshot:
+    """Fetch a fresh quota snapshot. Raises ZaiError on auth/logic failure.
+
+    api_key: the coding-plan API key to use. Defaults to ZAI_API_KEY from env.
+    """
     endpoint = os.getenv(
         "ZAI_QUOTA_ENDPOINT", "https://api.z.ai/api/monitor/usage/quota/limit"
     )
-    token = _token()
+    token = (api_key or "").strip() or _token()
     own_client = client is None
     if own_client:
         client = httpx.Client(timeout=20.0)
@@ -159,9 +162,9 @@ def fetch_snapshot(client: httpx.Client | None = None) -> Snapshot:
     )
 
 
-def fetch_account(client: httpx.Client | None = None) -> dict:
+def fetch_account(client: httpx.Client | None = None, api_key: str | None = None) -> dict:
     """Fetch account info (email, customer number). Best-effort."""
-    token = _token()
+    token = (api_key or "").strip() or _token()
     url = "https://api.z.ai/api/biz/customerService/zaiUserInfo"
     own = client is None
     if own:

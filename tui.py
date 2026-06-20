@@ -11,6 +11,7 @@ Run: python tui.py
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 
 from textual import work
@@ -22,6 +23,8 @@ from textual.widgets import Footer, Header, Static
 import config
 import store
 from fetcher import Quota, Snapshot, ZaiError, fetch_account, fetch_snapshot
+
+log = logging.getLogger("zai.tui")
 
 ORDER = ["five_hour", "weekly", "mcp"]
 PLAN_LABEL = {"max": "MAX", "pro": "PRO", "lite": "LITE"}
@@ -81,10 +84,11 @@ def _sparkline(samples: list[tuple[float, int]], width: int = 40) -> str:
 
 
 class QuotaBlock(Static):
-    """A single quota panel."""
+    """A single quota panel for a given account."""
 
-    def __init__(self, key: str) -> None:
+    def __init__(self, account: str, key: str) -> None:
         super().__init__()
+        self.account = account
         self.key = key
         self.quota: Quota | None = None
 
@@ -100,7 +104,7 @@ class QuotaBlock(Static):
             lines.append(f"  {_bar(pct)}  {pct}%")
         lines.append(f"  [dim]{_countdown(q.next_reset)}[/]")
         lines.append(f"  [dim]at {_reset_local(q.next_reset)}[/]")
-        hist = store.history(self.key, limit=60)
+        hist = store.history(self.account, self.key, limit=60)
         spark = _sparkline(hist)
         if spark:
             lines.append(f"  [dim]{spark}[/]")
@@ -115,13 +119,12 @@ class QuotaBlock(Static):
 
 
 class ZaiMonitorApp(App):
-    """Z.ai Coding Plan quota monitor."""
+    """Z.ai Coding Plan quota monitor (multi-account)."""
 
     CSS = """
     Screen { background: $surface; }
     #main { padding: 1 2; }
     .panel { border: round $primary; padding: 0 1; margin: 0 0 1 0; height: auto; }
-    Label { margin: 0 0 1 0; }
     #status { color: $text-muted; }
     """
 
@@ -134,15 +137,19 @@ class ZaiMonitorApp(App):
 
     def __init__(self) -> None:
         super().__init__()
-        self.snapshot: Snapshot | None = None
-        self.email: str | None = None
+        self.accounts = config.load_accounts()
+        # cache email per account (best-effort, fetched once)
+        self.emails: dict[str, str | None] = {a.name: None for a in self.accounts}
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
         with VerticalScroll(id="main"):
             yield Static("", id="title", classes="panel")
-            for key in ORDER:
-                yield QuotaBlock(key)
+            for idx, acct in enumerate(self.accounts):
+                label = acct.name or f"account {idx + 1}"
+                yield Static("", id=f"acct-{idx}", classes="panel")
+                for key in ORDER:
+                    yield QuotaBlock(label, key)
             yield Static("", id="status")
         yield Footer()
 
@@ -183,43 +190,72 @@ class ZaiMonitorApp(App):
     async def _do_refresh(self) -> None:
         import asyncio
 
-        try:
-            snap = await asyncio.to_thread(fetch_snapshot)
-        except ZaiError as e:
-            self._set_status(f"[red]error: {e}[/]")
-            return
-        if not self.email:
+        async def fetch_one(acct: config.Account) -> Snapshot | None:
             try:
-                acc = await asyncio.to_thread(fetch_account)
-                self.email = acc.get("email")
-            except Exception:
-                self.email = None
+                return await asyncio.to_thread(fetch_snapshot, api_key=acct.api_key)
+            except ZaiError as e:
+                log.warning("[%s] fetch failed: %s", acct.name or "account", e)
+                return None
 
-        self.snapshot = snap
+        snaps = await asyncio.gather(*[fetch_one(a) for a in self.accounts])
+
+        # fetch emails lazily (once) for accounts that don't have one cached
+        for acct, snap in zip(self.accounts, snaps, strict=True):
+            label = acct.name or "account"
+            if snap and self.emails.get(acct.name) is None:
+                try:
+                    acc_info = await asyncio.to_thread(fetch_account, api_key=acct.api_key)
+                    self.emails[acct.name] = acc_info.get("email")
+                except Exception:
+                    self.emails[acct.name] = None
+
+        # update each account's header + its quota blocks
+        for idx, (acct, snap) in enumerate(zip(self.accounts, snaps, strict=True)):
+            label = acct.name or f"account {idx + 1}"
+            level = "?"
+            if snap:
+                level = PLAN_LABEL.get((snap.level or "").lower(), (snap.level or "?").upper())
+            email = self.emails.get(acct.name)
+            header = f"[bold]{label}[/]"
+            if email:
+                header += f"   [dim]{email}[/]"
+            if snap:
+                header += f"   [cyan]{level}[/]"
+            else:
+                header += "   [red](fetch failed)[/]"
+            try:
+                self.query_one(f"#acct-{idx}", Static).update(header)
+            except Exception:
+                pass
+
+        # update all quota blocks with their snapshot (or None on failure)
         for block in self.query(QuotaBlock):
-            q = snap.get(block.key)
+            # find the snapshot for this block's account
+            snap = None
+            for acct, s in zip(self.accounts, snaps, strict=True):
+                if (acct.name or "account") == block.account:
+                    snap = s
+                    break
+            q = snap.get(block.key) if snap else None
             if q:
                 store.record_history(
+                    block.account,
                     block.key,
                     q.percentage,
                     q.next_reset.timestamp() if q.next_reset else None,
                 )
             block.set_quota(q)
 
-        level = PLAN_LABEL.get((snap.level or "").lower(), (snap.level or "?").upper())
-        fetched = snap.fetched_at.astimezone().strftime("%H:%M:%S")
-        header = f"[bold]z.ai GLM Coding Plan[/] — [cyan]{level}[/]"
-        if self.email:
-            header += f"   {self.email}"
-        acct = config.account_name()
-        if acct:
-            header += f"\n[magenta]↳ {acct}[/]"
-        header += f"\n[dim]last updated {fetched}[/]"
+        fetched = datetime.now().astimezone().strftime("%H:%M:%S")
+        n = len(self.accounts)
+        self._set_title(f"[bold]z.ai monitor[/] — [dim]{n} account(s) · updated {fetched}[/]")
+        self._set_status(f"updated {fetched} — next refresh in {self.refresh_in}s")
+
+    def _set_title(self, text: str) -> None:
         try:
-            self.query_one("#title", Static).update(header)
+            self.query_one("#title", Static).update(text)
         except Exception:
             pass
-        self._set_status(f"updated {fetched} — next refresh in {self.refresh_in}s")
 
     def _set_status(self, msg: str) -> None:
         try:

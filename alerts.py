@@ -76,17 +76,13 @@ def _fmt_quota(q: Quota) -> str:
     return f"  • {q.title}: {q.percentage}%{extra} — resets {reset_s}"
 
 
-def _build_message(snap: Snapshot, fired: list[tuple[str, int]], recovered: list[str]) -> str:
+def _build_message(
+    account_name: str, snap: Snapshot, fired: list[tuple[str, int]], recovered: list[str]
+) -> str:
     level = (snap.level or "?").upper()
-    try:
-        import config
-
-        acct = config.account_name()
-    except Exception:
-        acct = ""
     title = f"*z.ai Coding Plan ({level})* quota update"
-    if acct:
-        title += f" — _{acct}_"
+    if account_name:
+        title += f" — _{account_name}_"
     lines = [title, ""]
     if fired:
         parts = []
@@ -105,12 +101,12 @@ def _build_message(snap: Snapshot, fired: list[tuple[str, int]], recovered: list
     return "\n".join(lines)
 
 
-def _send_telegram(cfg: AlertConfig, text: str) -> None:
-    if not cfg.tg_bot_token or not cfg.tg_chat_ids:
+def _send_telegram(bot_token: str, chat_ids: list[str], text: str) -> None:
+    if not bot_token or not chat_ids:
         log.info("telegram not configured; would send:\n%s", text)
         return
-    bot = telegram.Bot(token=cfg.tg_bot_token)
-    for chat_id in cfg.tg_chat_ids:
+    bot = telegram.Bot(token=bot_token)
+    for chat_id in chat_ids:
         try:
             bot.send_message(
                 chat_id=chat_id,
@@ -122,77 +118,97 @@ def _send_telegram(cfg: AlertConfig, text: str) -> None:
             log.error("telegram send to %s failed: %s", chat_id, e)
 
 
-def evaluate(snap: Snapshot, cfg: AlertConfig) -> tuple[list[tuple[str, int]], list[str]]:
+def evaluate(
+    account: str, snap: Snapshot, cfg: AlertConfig
+) -> tuple[list[tuple[str, int]], list[str]]:
     """Decide what to fire based on the snapshot and persistent state."""
     fired: list[tuple[str, int]] = []
     recovered: list[str] = []
-    now = time.time()
 
     for key in ORDER:
         q = snap.get(key)
         if not q:
             continue
-        next_cycle = store.cycle_id(q.next_reset.timestamp() if q.next_reset else None)
-        store.record_history(key, q.percentage, q.next_reset.timestamp() if q.next_reset else None)
+        reset_ts = q.next_reset.timestamp() if q.next_reset else None
+        next_cycle = store.cycle_id(reset_ts)
+        store.record_history(account, key, q.percentage, reset_ts)
 
         # Recovered / reset notice: fire once per cycle when usage drops low.
-        # The cycle_id (nextResetTime) changes on reset, which naturally
-        # re-arms all threshold alerts for the new cycle.
         if q.percentage < cfg.recovered_below:
-            should, _ = store.should_fire(key, -1, next_cycle)
+            should, _ = store.should_fire(account, key, -1, next_cycle)
             if should:
                 recovered.append(q.title)
-                store.mark_fired(key, -1, next_cycle)
+                store.mark_fired(account, key, -1, next_cycle)
             continue
 
         # Threshold crossings on the way up
         for lvl in cfg.thresholds:
             if q.percentage >= lvl:
-                should, _ = store.should_fire(key, lvl, next_cycle)
+                should, _ = store.should_fire(account, key, lvl, next_cycle)
                 if should:
                     fired.append((key, lvl))
-                    store.mark_fired(key, lvl, next_cycle)
+                    store.mark_fired(account, key, lvl, next_cycle)
 
-    # global anti-spam floor
-    if (fired or recovered) and now - _last_send() < cfg.min_interval_sec:
-        log.info("suppressed by min_interval floor")
-        return [], []
+    return fired, recovered
     return fired, recovered
 
 
-_LAST_SEND_KEY = "last_alert_send_ts"
+_LAST_SEND_KEY = "last_alert_send_ts:"
 
 
-def _last_send() -> float:
+def _last_send(account: str) -> float:
     with store.get_conn() as c:
-        row = c.execute("SELECT v FROM meta WHERE k=?", (_LAST_SEND_KEY,)).fetchone()
+        row = c.execute("SELECT v FROM meta WHERE k=?", (_LAST_SEND_KEY + account,)).fetchone()
         return float(row["v"]) if row else 0.0
 
 
-def _mark_sent(ts: float) -> None:
+def _mark_sent(account: str, ts: float) -> None:
     with store.get_conn() as c:
         c.execute(
             "INSERT INTO meta(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v",
-            (_LAST_SEND_KEY, str(ts)),
+            (_LAST_SEND_KEY + account, str(ts)),
         )
 
 
 def run_once(cfg: AlertConfig | None = None) -> None:
+    """Poll every account, evaluate, and send per-account alerts."""
+    import config
+
     cfg = cfg or _load_config()
-    try:
-        snap = fetch_snapshot()
-    except ZaiError as e:
-        log.error("fetch failed: %s", e)
+    accounts = config.load_accounts()
+    if not accounts:
+        log.warning("no accounts configured (accounts.toml or ZAI_API_KEY)")
         return
 
-    fired, recovered = evaluate(snap, cfg)
-    if fired or recovered:
-        msg = _build_message(snap, fired, recovered)
-        _send_telegram(cfg, msg)
-        _mark_sent(time.time())
-        log.info("alert sent: fired=%s recovered=%s", fired, recovered)
-    else:
-        log.info("no alerts (5h=%s%% weekly=%s%%)", _pct(snap, "five_hour"), _pct(snap, "weekly"))
+    for acct in accounts:
+        label = acct.name or "account"
+        try:
+            snap = fetch_snapshot(api_key=acct.api_key)
+        except ZaiError as e:
+            log.error("[%s] fetch failed: %s", label, e)
+            continue
+
+        fired, recovered = evaluate(label, snap, cfg)
+
+        # per-account min_interval anti-spam floor
+        now = time.time()
+        if (fired or recovered) and now - _last_send(label) < cfg.min_interval_sec:
+            log.info("[%s] suppressed by min_interval floor", label)
+            continue
+
+        if fired or recovered:
+            msg = _build_message(label, snap, fired, recovered)
+            recipients = acct.tg_chat_ids or cfg.tg_chat_ids
+            _send_telegram(cfg.tg_bot_token, recipients, msg)
+            _mark_sent(label, now)
+            log.info("[%s] alert sent: fired=%s recovered=%s", label, fired, recovered)
+        else:
+            log.info(
+                "[%s] no alerts (5h=%s%% weekly=%s%%)",
+                label,
+                _pct(snap, "five_hour"),
+                _pct(snap, "weekly"),
+            )
 
 
 def _pct(snap: Snapshot, key: str) -> str:
@@ -201,21 +217,18 @@ def _pct(snap: Snapshot, key: str) -> str:
 
 
 def main() -> int:
-    from pathlib import Path
-
-    import tomllib
+    import config
 
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
     store.init()
+    interval = config.poll_interval()
 
-    cfg_path = Path(__file__).parent / "config.toml"
-    cfg_full = tomllib.loads(cfg_path.read_text()) if cfg_path.exists() else {}
-    interval = int(cfg_full.get("monitor", {}).get("poll_interval", 300))
-
-    log.info("zai-monitor alerts daemon starting (poll every %ds)", interval)
+    accounts = config.load_accounts()
+    log.info("zai-monitor alerts daemon starting (%d account(s), poll every %ds)",
+             len(accounts), interval)
     cfg = _load_config()
     while True:
         try:
