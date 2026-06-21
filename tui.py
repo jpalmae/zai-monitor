@@ -131,7 +131,14 @@ class StatusBar(Static):
         keys = "   ".join(
             f"[bold cyan] {k} [/][dim]{desc}[/]" for k, desc in FOOTER_BINDINGS
         )
-        return f"{self.status}{keys}"
+        # right-align the keys: pad between status (left) and keys (right)
+        from rich.text import Text
+
+        width = self.content_size.width or 80
+        status_len = len(Text.from_markup(self.status).plain)
+        keys_len = len(Text.from_markup(keys).plain)
+        pad = width - status_len - keys_len
+        return f"{self.status}{' ' * max(1, pad)}{keys}"
 
 
 class ZaiMonitorApp(App):
@@ -266,13 +273,10 @@ class ZaiMonitorApp(App):
         self.update_status()
 
     def update_status(self) -> None:
-        """Render the bottom status bar: accounts · updated · countdown."""
+        """Render the bottom status bar: accounts · updated (left), keys (right)."""
         n = len(self.accounts)
         updated = self.last_updated or "—"
-        msg = (
-            f"[dim]{n} account(s) · updated {updated} · "
-            f"next in {self.refresh_in}s[/]"
-        )
+        msg = f"[dim]{n} account(s) · updated {updated}[/]"
         try:
             self.query_one("#statusbar", StatusBar).status = msg
         except Exception:
