@@ -119,7 +119,7 @@ class QuotaBlock(Static):
 
 
 # Bindings shown in the bottom status bar (key, label).
-FOOTER_BINDINGS = [("r", "Refresh"), ("t", "Theme"), ("q", "Quit")]
+FOOTER_BINDINGS = [("r", "Refresh"), ("t", "Theme"), ("q", "Quit"), ("^p", "Palette")]
 
 
 class StatusBar(Static):
