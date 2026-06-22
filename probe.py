@@ -1,6 +1,6 @@
 """Probe the Z.ai internal quota endpoint to discover the response shape.
 
-Run:  python probe.py
+Run:  python3 probe.py
 Reads ZAI_API_KEY / ZAI_JWT from .env (or env vars).
 
 It tries, in order:

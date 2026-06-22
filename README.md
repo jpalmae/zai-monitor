@@ -19,7 +19,7 @@ avisa cuando pasas ciertos umbrales de consumo.
 4. [Uso](#uso)
 5. [Alertas por Telegram](#alertas-por-telegram)
 6. [Daemon en background (macOS)](#daemon-en-background-macos)
-7. [Daemon en background (Linux / Ubuntu 24.04+)](#daemon-en-background-linux--ubuntu-2404)
+7. [Daemon en background (Linux / Ubuntu 22.04+)](#daemon-en-background-linux--ubuntu-2204)
 8. [Configuración](#configuración)
 9. [Solución de problemas](#solución-de-problemas)
 10. [Cómo funciona (notas técnicas)](#cómo-funciona-notas-técnicas)
@@ -49,7 +49,7 @@ Esto clona el repo en `~/zai-monitor`, crea el venv, instala todo y prepara el
 curl -fsSL https://raw.githubusercontent.com/jpalmae/zai-monitor/main/install.sh | bash -s -- ~/dev/zai
 ```
 
-Luego solo edita `.env` con tu API key (siguiente sección) y corre `python tui.py`.
+Luego solo edita `.env` con tu API key (siguiente sección) y corre `python3 tui.py`.
 
 ### Opción manual
 
@@ -108,7 +108,7 @@ python fetcher.py
 ### 1. TUI en vivo (uso principal)
 
 ```bash
-python tui.py
+python3 tui.py
 ```
 
 Verás algo así:
@@ -160,7 +160,7 @@ python fetcher.py
 ### 3. Daemon de alertas (foreground)
 
 ```bash
-python alerts.py
+python3 alerts.py
 ```
 Hace polling cada 5 min y envía alertas a Telegram si configuras las credenciales
 (ver sección [Alertas por Telegram](#alertas-por-telegram)). Sin Telegram
@@ -186,7 +186,7 @@ El proyecto incluye un helper que **auto-detecta tu chat id** (no tienes que
 buscarlo a mano):
 
 ```bash
-python setup_telegram.py TU:TOKEN_AQUI
+python3 setup_telegram.py TU:TOKEN_AQUI
 ```
 El script:
 1. Valida el token
@@ -279,7 +279,7 @@ launchctl load   ~/Library/LaunchAgents/ai.zai-monitor.alerts.plist
 
 ---
 
-## Daemon en background (Linux / Ubuntu 24.04+)
+## Daemon en background (Linux / Ubuntu 22.04+)
 
 Usa **systemd** con un servicio de usuario (sin necesidad de root). El daemon
 loguea al journal del sistema (no necesita archivo de log).

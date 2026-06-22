@@ -145,7 +145,7 @@ configure_accounts() {
     # Validate by doing a live fetch with the venv python.
     echo "" >&2
     cyan ">> Validating accounts (live fetch)..."
-    if python -c "
+    if python3 -c "
 import config, fetcher
 accts = config.load_accounts()
 if not accts:
@@ -176,16 +176,16 @@ $(cyan "Next steps:")
   1. Launch the TUI:
        cd "$TARGET_DIR"
        source .venv/bin/activate
-       python tui.py
+       python3 tui.py
 
   2. (optional) Configure Telegram alerts — create a bot with @BotFather,
      then run:
-       python setup_telegram.py "YOUR:BOT_TOKEN"
+       python3 setup_telegram.py "YOUR:BOT_TOKEN"
      and add recipients in config.toml ([alerts] tg_chat_ids = [...])
 
   3. (optional) Run the alerts daemon in the background:
        macOS:   see README -> "Daemon en background (macOS)"
-       Linux:   see README -> "Daemon en background (Linux / Ubuntu 24.04+)"
+       Linux:   see README -> "Daemon en background (Linux / Ubuntu 22.04+)"
 
   Get your API key from: https://z.ai/manage-apikey/apikey-list
   Re-run this installer any time to UPDATE: it pulls and reinstalls cleanly.

@@ -4,9 +4,9 @@ Given a bot token (from @BotFather), waits for you to send /start to the bot,
 auto-detects your chat_id, sends a test message, and writes both into config.toml.
 
 Usage:
-  python setup_telegram.py <BOT_TOKEN>
+  python3 setup_telegram.py <BOT_TOKEN>
 or set TG_BOT_TOKEN in .env and run:
-  python setup_telegram.py
+  python3 setup_telegram.py
 """
 
 from __future__ import annotations

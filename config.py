@@ -6,7 +6,10 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-import tomllib
+try:
+    import tomllib  # Python 3.11+
+except ModuleNotFoundError:  # Python 3.10
+    import tomli as tomllib  # type: ignore[no-redef]
 from dotenv import load_dotenv
 
 load_dotenv()  # load .env so ZAI_API_KEY etc. are available to all consumers

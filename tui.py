@@ -6,7 +6,7 @@ Live view of:
   - Web Search / Reader / Zread (used/total + countdown)
 Plus sparkline of recent history and color-coded status.
 
-Run: python tui.py
+Run: python3 tui.py
 """
 
 from __future__ import annotations
