@@ -17,6 +17,9 @@ poll_interval = 300
 [tui]
 # TUI auto-refresh interval (seconds)
 refresh_interval = 60
+# Show the "Web Search / Reader / Zread" (MCP) panel?
+# Can also be toggled at runtime with the 'm' key.
+show_mcp = true
 
 [alerts]
 # Telegram (leave empty to disable alerts)

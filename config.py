@@ -43,6 +43,11 @@ def tui_refresh_interval() -> int:
     return int(_load_cfg().get("tui", {}).get("refresh_interval", 60))
 
 
+def show_mcp_default() -> bool:
+    """Whether to show the Web Search / Reader / Zread panel in the TUI."""
+    return bool(_load_cfg().get("tui", {}).get("show_mcp", True))
+
+
 def poll_interval() -> int:
     return int(_load_cfg().get("monitor", {}).get("poll_interval", 300))
 

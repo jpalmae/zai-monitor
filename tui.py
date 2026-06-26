@@ -119,7 +119,7 @@ class QuotaBlock(Static):
 
 
 # Bindings shown in the bottom status bar (key, label).
-FOOTER_BINDINGS = [("r", "Refresh"), ("t", "Theme"), ("q", "Quit"), ("^p", "Palette")]
+FOOTER_BINDINGS = [("r", "Refresh"), ("t", "Theme"), ("m", "MCP"), ("q", "Quit"), ("^p", "Palette")]
 
 
 class StatusBar(Static):
@@ -148,15 +148,19 @@ class ZaiMonitorApp(App):
     Screen { background: $surface; }
     #main { padding: 1 2; }
     .panel { border: round $primary; padding: 0 1; margin: 0 0 1 0; height: auto; }
+    .mcp-block { height: auto; }
+    .mcp-block.hidden { display: none; }
     StatusBar { dock: bottom; height: 1; padding: 0 1; background: $boost; }
     """
 
     BINDINGS = [
         ("r", "refresh", "Refresh"),
         ("t", "toggle_theme", "Theme"),
+        ("m", "toggle_mcp", "MCP"),
         ("q", "quit", "Quit"),
     ]
     refresh_in = reactive(0)
+    show_mcp = reactive(True)
 
     def __init__(self) -> None:
         super().__init__()
@@ -172,7 +176,10 @@ class ZaiMonitorApp(App):
                 label = acct.name or f"account {idx + 1}"
                 yield Static("", id=f"acct-{idx}", classes="panel")
                 for key in ORDER:
-                    yield QuotaBlock(label, key)
+                    block = QuotaBlock(label, key)
+                    if key == "mcp":
+                        block.add_class("mcp-block")
+                    yield block
         yield StatusBar(id="statusbar")
 
     def on_mount(self) -> None:
@@ -185,6 +192,13 @@ class ZaiMonitorApp(App):
                 self.theme = saved_theme
             except Exception:
                 pass
+        # show_mcp: prefer saved preference, fall back to config.toml default
+        saved_mcp = store.get_meta("show_mcp", "")
+        if saved_mcp:
+            self.show_mcp = saved_mcp == "1"
+        else:
+            self.show_mcp = config.show_mcp_default()
+        self._apply_mcp_visibility()
         self._do_refresh()
         self.set_interval(1, self._tick)
 
@@ -194,6 +208,21 @@ class ZaiMonitorApp(App):
             store.set_meta("theme", theme)
         except Exception:
             pass
+
+    def watch_show_mcp(self, value: bool) -> None:
+        """Persist MCP panel visibility across restarts."""
+        try:
+            store.set_meta("show_mcp", "1" if value else "0")
+        except Exception:
+            pass
+        self._apply_mcp_visibility()
+
+    def _apply_mcp_visibility(self) -> None:
+        for block in self.query(".mcp-block"):
+            block.set_class(not self.show_mcp, "hidden")
+
+    def action_toggle_mcp(self) -> None:
+        self.show_mcp = not self.show_mcp
 
     def _tick(self) -> None:
         self.refresh_in -= 1
