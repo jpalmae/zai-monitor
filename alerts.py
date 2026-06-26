@@ -35,7 +35,10 @@ class AlertConfig:
 def _load_config() -> AlertConfig:
     from pathlib import Path
 
-    import tomllib
+    try:
+        import tomllib  # Python 3.11+
+    except ModuleNotFoundError:  # Python 3.10
+        import tomli as tomllib  # type: ignore[no-redef]
 
     cfg_path = Path(__file__).parent / "config.toml"
     cfg = tomllib.loads(cfg_path.read_text()) if cfg_path.exists() else {}
@@ -149,7 +152,6 @@ def evaluate(
                     fired.append((key, lvl))
                     store.mark_fired(account, key, lvl, next_cycle)
 
-    return fired, recovered
     return fired, recovered
 
 
