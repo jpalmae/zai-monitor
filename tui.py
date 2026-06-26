@@ -157,7 +157,7 @@ class ZaiMonitorApp(App):
         ("r", "refresh", "Refresh"),
         ("t", "toggle_theme", "Theme"),
         ("m", "toggle_mcp", "MCP"),
-        ("p", "palette", "Palette"),
+        ("p", "command_palette", "Palette"),
         ("q", "quit", "Quit"),
     ]
     refresh_in = reactive(0)
