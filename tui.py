@@ -119,7 +119,7 @@ class QuotaBlock(Static):
 
 
 # Bindings shown in the bottom status bar (key, label).
-FOOTER_BINDINGS = [("r", "Refresh"), ("t", "Theme"), ("m", "MCP"), ("q", "Quit"), ("^p", "Palette")]
+FOOTER_BINDINGS = [("r", "Refresh"), ("t", "Theme"), ("m", "MCP"), ("p", "Palette"), ("q", "Quit")]
 
 
 class StatusBar(Static):
@@ -157,6 +157,7 @@ class ZaiMonitorApp(App):
         ("r", "refresh", "Refresh"),
         ("t", "toggle_theme", "Theme"),
         ("m", "toggle_mcp", "MCP"),
+        ("p", "palette", "Palette"),
         ("q", "quit", "Quit"),
     ]
     refresh_in = reactive(0)
