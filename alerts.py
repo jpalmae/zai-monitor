@@ -1,10 +1,15 @@
-"""Background alert daemon: poll quotas, fire Telegram alerts on thresholds.
+"""Background alert daemon + Telegram bot: poll quotas, fire alerts, answer /status.
 
 Debounce model:
   - Each quota has a "cycle" = its current reset window (nextResetTime).
   - When usage crosses a threshold going UP, fire once per (quota, level, cycle).
   - When usage drops below `recovered_below` after a cycle change, fire a
     "recovered" notice and clear that quota's debounce so future alerts work.
+
+Telegram bot:
+  - The daemon long-polls getUpdates in the main loop (5s timeout).
+  - /status  — replies with a live summary of all accounts.
+  - /start   — welcomes new users (anyone; /status is restricted to known ids).
 """
 
 from __future__ import annotations
@@ -132,6 +137,114 @@ def _send_telegram(bot_token: str, chat_ids: list[str], text: str) -> bool:
     return ok
 
 
+# --- Telegram bot command handling -------------------------------------------
+
+_TG_OFFSET_KEY = "tg_update_offset"
+
+
+def _load_tg_offset() -> int:
+    try:
+        return int(store.get_meta(_TG_OFFSET_KEY, "0"))
+    except ValueError:
+        return 0
+
+
+def _save_tg_offset(offset: int) -> None:
+    store.set_meta(_TG_OFFSET_KEY, str(offset))
+
+
+def _authorized_chat_ids(cfg: AlertConfig) -> set[str]:
+    """Collect all authorized chat_ids from global config + per-account overrides."""
+    import config
+
+    ids = set(cfg.tg_chat_ids)
+    for acct in config.load_accounts():
+        if acct.tg_chat_ids:
+            ids.update(acct.tg_chat_ids)
+    return ids
+
+
+def _send_status_response(cfg: AlertConfig, chat_id: str) -> None:
+    """Fetch live quotas for all accounts and send a summary to chat_id."""
+    import config
+
+    accounts = config.load_accounts()
+    lines = ["📊 *zai-monitor — Status*\n"]
+    for acct in accounts:
+        label = acct.name or "account"
+        try:
+            snap = fetch_snapshot(api_key=acct.api_key)
+        except Exception as e:
+            lines.append(f"❌ _{label}_: fetch failed ({e})\n")
+            continue
+        level = (snap.level or "?").upper()
+        lines.append(f"*{label}* ({level})")
+        for key in ORDER:
+            q = snap.get(key)
+            if not q:
+                continue
+            if q.percentage >= 90:
+                icon = "🔴"
+            elif q.percentage >= 50:
+                icon = "🟡"
+            else:
+                icon = "🟢"
+            reset_s = ""
+            if q.next_reset:
+                reset_s = q.next_reset.astimezone().strftime("  ↻ %a %H:%M")
+            lines.append(f"  {icon} {q.title}: *{q.percentage}%*{reset_s}")
+        lines.append("")
+    _send_telegram(cfg.tg_bot_token, [chat_id], "\n".join(lines))
+
+
+def _handle_telegram_updates(cfg: AlertConfig, offset: int, timeout: int = 5) -> int:
+    """Long-poll Telegram for incoming commands. Returns the new offset."""
+    if not cfg.tg_bot_token:
+        return offset
+    import httpx
+
+    try:
+        r = httpx.post(
+            f"https://api.telegram.org/bot{cfg.tg_bot_token}/getUpdates",
+            json={"offset": offset, "timeout": timeout, "allowed_updates": ["message"]},
+            timeout=timeout + 10,
+        )
+        data = r.json()
+    except Exception as e:
+        log.debug("telegram getUpdates: %s", e)
+        return offset
+
+    if not data.get("ok"):
+        return offset
+
+    new_offset = offset
+    authorized = _authorized_chat_ids(cfg)
+    for update in data.get("result", []):
+        new_offset = update["update_id"] + 1
+        msg = update.get("message")
+        if not msg:
+            continue
+        chat_id = str(msg["chat"]["id"])
+        text = (msg.get("text") or "").strip()
+
+        if text.startswith("/start"):
+            _send_telegram(
+                cfg.tg_bot_token,
+                [chat_id],
+                "✅ *zai-monitor* bot activo.\nUsa /status para ver las cuotas.",
+            )
+            continue
+
+        if text.startswith("/status") or text == "/s":
+            if authorized and chat_id not in authorized:
+                log.warning("unauthorized /status from chat_id=%s", chat_id)
+                continue
+            _send_status_response(cfg, chat_id)
+            continue
+
+    return new_offset
+
+
 def evaluate(
     account: str, snap: Snapshot, cfg: AlertConfig
 ) -> tuple[list[tuple[str, int]], list[str], list[tuple[str, int, str]]]:
@@ -251,15 +364,32 @@ def main() -> int:
     interval = config.poll_interval()
 
     accounts = config.load_accounts()
-    log.info("zai-monitor alerts daemon starting (%d account(s), poll every %ds)",
-             len(accounts), interval)
     cfg = _load_config()
+    bot_mode = bool(cfg.tg_bot_token)
+    log.info(
+        "zai-monitor alerts daemon starting (%d account(s), poll every %ds%s)",
+        len(accounts),
+        interval,
+        ", telegram bot active" if bot_mode else "",
+    )
+
+    offset = _load_tg_offset() if bot_mode else 0
+    last_poll = 0.0
+
     while True:
-        try:
-            run_once(cfg)
-        except Exception:
-            log.exception("unexpected error in poll loop")
-        time.sleep(interval)
+        if bot_mode:
+            offset = _handle_telegram_updates(cfg, offset, timeout=5)
+            _save_tg_offset(offset)
+        else:
+            time.sleep(5)
+
+        now = time.time()
+        if now - last_poll >= interval:
+            try:
+                run_once(cfg)
+            except Exception:
+                log.exception("unexpected error in poll loop")
+            last_poll = now
 
 
 if __name__ == "__main__":
