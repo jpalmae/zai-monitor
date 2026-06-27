@@ -3,4 +3,3 @@ python-dotenv>=1.0
 tomli>=2.0; python_version < "3.11"
 textual>=0.60
 rich>=13.7
-python-telegram-bot>=21

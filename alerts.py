@@ -13,8 +13,6 @@ import logging
 import time
 from dataclasses import dataclass
 
-import telegram
-
 import store
 from fetcher import Quota, Snapshot, ZaiError, fetch_snapshot
 
@@ -109,17 +107,26 @@ def _send_telegram(bot_token: str, chat_ids: list[str], text: str) -> bool:
     if not bot_token or not chat_ids:
         log.info("telegram not configured; would send:\n%s", text)
         return True
-    bot = telegram.Bot(token=bot_token)
+    import httpx
+
     ok = False
     for chat_id in chat_ids:
         try:
-            bot.send_message(
-                chat_id=chat_id,
-                text=text,
-                parse_mode="Markdown",
+            r = httpx.post(
+                f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                json={"chat_id": chat_id, "text": text, "parse_mode": "Markdown"},
+                timeout=15,
             )
-            log.info("sent to chat_id=%s", chat_id)
-            ok = True
+            data = r.json()
+            if r.is_success and data.get("ok"):
+                log.info("sent to chat_id=%s", chat_id)
+                ok = True
+            else:
+                log.error(
+                    "telegram send to %s failed: %s",
+                    chat_id,
+                    data.get("description", r.text[:200]),
+                )
         except Exception as e:
             log.error("telegram send to %s failed: %s", chat_id, e)
     return ok

@@ -75,7 +75,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 cyan ">> Installing dependencies (this can take a minute)"
 pip install --quiet --upgrade pip
-pip install --quiet -e ".[tui,telegram,dev]" httpx python-dotenv
+pip install --quiet -e ".[tui,dev]" httpx python-dotenv
 
 # ---- 4. .env -----------------------------------------------------------------
 if [ ! -f .env ]; then
