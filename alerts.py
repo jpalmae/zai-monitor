@@ -104,11 +104,13 @@ def _build_message(
     return "\n".join(lines)
 
 
-def _send_telegram(bot_token: str, chat_ids: list[str], text: str) -> None:
+def _send_telegram(bot_token: str, chat_ids: list[str], text: str) -> bool:
+    """Send text to all chat_ids. Returns True if sent (or skipped due to no config)."""
     if not bot_token or not chat_ids:
         log.info("telegram not configured; would send:\n%s", text)
-        return
+        return True
     bot = telegram.Bot(token=bot_token)
+    ok = False
     for chat_id in chat_ids:
         try:
             bot.send_message(
@@ -117,16 +119,23 @@ def _send_telegram(bot_token: str, chat_ids: list[str], text: str) -> None:
                 parse_mode="Markdown",
             )
             log.info("sent to chat_id=%s", chat_id)
+            ok = True
         except Exception as e:
             log.error("telegram send to %s failed: %s", chat_id, e)
+    return ok
 
 
 def evaluate(
     account: str, snap: Snapshot, cfg: AlertConfig
-) -> tuple[list[tuple[str, int]], list[str]]:
-    """Decide what to fire based on the snapshot and persistent state."""
+) -> tuple[list[tuple[str, int]], list[str], list[tuple[str, int, str]]]:
+    """Decide what to fire WITHOUT marking. Returns (fired, recovered, to_mark).
+
+    to_mark is a list of (quota_key, level, cycle_id) to persist AFTER a
+    successful send, so failed sends can retry on the next poll.
+    """
     fired: list[tuple[str, int]] = []
     recovered: list[str] = []
+    to_mark: list[tuple[str, int, str]] = []
 
     for key in ORDER:
         q = snap.get(key)
@@ -141,7 +150,7 @@ def evaluate(
             should, _ = store.should_fire(account, key, -1, next_cycle)
             if should:
                 recovered.append(q.title)
-                store.mark_fired(account, key, -1, next_cycle)
+                to_mark.append((key, -1, next_cycle))
             continue
 
         # Threshold crossings on the way up
@@ -150,9 +159,9 @@ def evaluate(
                 should, _ = store.should_fire(account, key, lvl, next_cycle)
                 if should:
                     fired.append((key, lvl))
-                    store.mark_fired(account, key, lvl, next_cycle)
+                    to_mark.append((key, lvl, next_cycle))
 
-    return fired, recovered
+    return fired, recovered, to_mark
 
 
 _LAST_SEND_KEY = "last_alert_send_ts:"
@@ -190,7 +199,7 @@ def run_once(cfg: AlertConfig | None = None) -> None:
             log.error("[%s] fetch failed: %s", label, e)
             continue
 
-        fired, recovered = evaluate(label, snap, cfg)
+        fired, recovered, to_mark = evaluate(label, snap, cfg)
 
         # per-account min_interval anti-spam floor
         now = time.time()
@@ -201,9 +210,15 @@ def run_once(cfg: AlertConfig | None = None) -> None:
         if fired or recovered:
             msg = _build_message(label, snap, fired, recovered)
             recipients = acct.tg_chat_ids or cfg.tg_chat_ids
-            _send_telegram(cfg.tg_bot_token, recipients, msg)
-            _mark_sent(label, now)
-            log.info("[%s] alert sent: fired=%s recovered=%s", label, fired, recovered)
+            sent_ok = _send_telegram(cfg.tg_bot_token, recipients, msg)
+            if sent_ok:
+                for qkey, lvl, cycle in to_mark:
+                    store.mark_fired(label, qkey, lvl, cycle)
+                _mark_sent(label, now)
+            log.info(
+                "[%s] alert sent: fired=%s recovered=%s (ok=%s)",
+                label, fired, recovered, sent_ok,
+            )
         else:
             log.info(
                 "[%s] no alerts (5h=%s%% weekly=%s%%)",
