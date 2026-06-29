@@ -33,4 +33,5 @@ tg_chat_ids = []
 
 thresholds       = [50, 75, 90, 100]  # % at which to alert (on the way up)
 recovered_below  = 20                  # notify "reset/available" when usage drops below
+notify_reset     = true                # send a "quota reset/recovered" notice (on/off)
 min_interval_sec = 60                  # global anti-spam floor between any two alerts

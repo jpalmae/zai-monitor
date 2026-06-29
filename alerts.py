@@ -33,6 +33,7 @@ class AlertConfig:
     thresholds: list[int]
     recovered_below: int
     min_interval_sec: int
+    notify_reset: bool
 
 
 def _load_config() -> AlertConfig:
@@ -65,6 +66,7 @@ def _load_config() -> AlertConfig:
         thresholds=sorted(a.get("thresholds", [50, 75, 90, 100])),
         recovered_below=int(a.get("recovered_below", 20)),
         min_interval_sec=int(a.get("min_interval_sec", 60)),
+        notify_reset=bool(a.get("notify_reset", True)),
     )
 
 
@@ -267,10 +269,11 @@ def evaluate(
 
         # Recovered / reset notice: fire once per cycle when usage drops low.
         if q.percentage < cfg.recovered_below:
-            should, _ = store.should_fire(account, key, -1, next_cycle)
-            if should:
-                recovered.append(q.title)
-                to_mark.append((key, -1, next_cycle))
+            if cfg.notify_reset:
+                should, _ = store.should_fire(account, key, -1, next_cycle)
+                if should:
+                    recovered.append(q.title)
+                    to_mark.append((key, -1, next_cycle))
             continue
 
         # Threshold crossings on the way up
