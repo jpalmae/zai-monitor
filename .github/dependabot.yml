@@ -1,6 +1,14 @@
 version: 2
+
 updates:
-  - package-ecosystem: "pip"
-    directory: "/"
+  # pip deps
+  - package-ecosystem: pip
+    directory: /
     schedule:
-      interval: "daily"
+      interval: daily
+    open-pull-requests-limit: 5
+    groups:
+      patch-minor:
+        update-types:
+          - patch
+          - minor
